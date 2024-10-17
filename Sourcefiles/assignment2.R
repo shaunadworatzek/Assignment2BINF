@@ -1,16 +1,16 @@
 #Loading the needed packages to open data from NCBI and GloBI into R 
-#NCBI
 
-install.packages("rentrez")
 library(rentrez)
-install.packages("seqinr")
 library(seqinr)
-install.packages("stringr")
 library(stringr)
-
-install.packages("phangorn")
 library(phangorn)
 library(Biostrings)
+library(muscle)
+library(DECIPHER)
+library(BiocManager)
+library(ape)
+library(RSQLite)
+
 #Loading needed packages to clean up the data 
 
 library(tidyverse)
@@ -27,7 +27,7 @@ gene18S_search
 gene18S_search$web_history ## This stores the ID on the NCBI server.
 
 #Load source function
-source("Entrez_Functions.R")
+source("Sourcefiles/Entrez_Functions.R")
 
 
 # Fetching the sequences in FASTA format and writing to file.
@@ -56,7 +56,7 @@ length(unique(df_Onchocercidae_18S$Species))
 df_Onchocercidae_18S.explore <- df_Onchocercidae_18S %>%
   mutate(seqlength = nchar(df_Onchocercidae_18S$Sequence))
 
-hist(x = df.parasite.explore$seqlength, xlab = "Sequence Legnth", ylab = "Frequency (No. Sequences")
+hist(x = df_Onchocercidae_18S.explore$seqlength, xlab = "Sequence Legnth", ylab = "Frequency (No. Sequences")
 
 #Making the sequences into a DNAstringset
 
@@ -66,6 +66,8 @@ class(df_Onchocercidae_18S$Sequence2)
 
 names(df_Onchocercidae_18S$Sequence2) <- df_Onchocercidae_18S$code
 names(df_Onchocercidae_18S$Sequence2)
+
+#Looking at the seqiences on an online broswer
 
 BrowseSeqs(df_Onchocercidae_18S$Sequence2)
   
