@@ -73,6 +73,8 @@ BrowseSeqs(df_Onchocercidae_18S$Sequence2)
   
 ####PART 2 - finding a centroid sequence for each species---- 
 
+#I think that I need to run that muscle function at the bottom before I run this -because we need an aligned data set before we do this -- but maybe its also a filtering problem 
+#I also need to do some filtering before I do this!!!
 
 #Grouping sequences by species 
 
@@ -113,11 +115,10 @@ library(rglobi)
 
 ??get_interactions_by_taxa
 get_interaction_types()
-df.parasite_Onc <- get_interactions_by_taxa(sourcetaxon='Onchocercidae', interactiontype='parasiteOf', returnobservations = TRUE, 
+df.parasite_Onc2 <- get_interactions_by_taxa(sourcetaxon='Onchocercidae', interactiontype='parasiteOf', returnobservations = TRUE, opts = list(),
                                      showfield = c("source_taxon_external_id", "source_taxon_name",
                                                    "interaction_type", "target_taxon_external_id",
-                                                   "target_taxon_name", "latitude",
-                                                   "longitude", "study_citation", "study_external_id", "study_source_citation"))
+                                                   "target_taxon_name", "study_external_id"))
 
 
 #cleaning up the data to only have complete species 
@@ -136,8 +137,8 @@ length(unique(df.parasite.oncsub$source_taxon_name))
 
 #combing the two data sets 
 ?semi_join
-df.onc <- anti_join(df.parasite.oncsub, df_Onchocercidae_18S, join_by("source_taxon_name" == "Species"))
-df.onc <- semi_join(df_Onchocercidae_18S, df.parasite.oncsub, join_by("Species" == "source_taxon_name"))
+df.onc1 <- anti_join(df.parasite.oncsub, df_Onchocercidae_18S, join_by("source_taxon_name" == "Species"))
+df.onc2 <- semi_join(df_Onchocercidae_18S, df.parasite.oncsub, join_by("Species" == "source_taxon_name"))
 
 df_Onchocercidae_traitgene <- full_join(df_Onchocercidae_18S, df.parasite.oncsub, join_by("Species" == "source_taxon_name"), keep = TRUE, relationship = "many-to-many")
 ?full_join
@@ -164,3 +165,5 @@ df.parasite.alignment
 
 BrowseSeqs(df.parasite.alignment)
 
+
+length(all.equal(df.parasite.oncsub$source_taxon_name, df_Onchocercidae_18S$Species))

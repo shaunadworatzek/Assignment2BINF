@@ -61,7 +61,7 @@ df_Nematoda_18S.explore <- df_Nematoda_18S %>%
 hist(x = df_Nematoda_18S.explore$seqlength, xlab = "Sequence Legnth", ylab = "Frequency (No. Sequences")
 
 
-#Looking at the seqiences on an online broswer
+#Looking at the sequences on an online browser
 
 BrowseSeqs(df_Onchocercidae_18S$Sequence2)
 
@@ -180,7 +180,7 @@ length(unique(df.Nematoda_trait$Species))
 
 
 # Define a vector of possible classes of vertebrates
-vertebrate_classes <- c("Mammalia", "Aves", "Reptilia", "Amphibia", "Osteichthyes", "Agnatha", "Chondrichthyes")
+vertebrate_classes <- c("Mammalia", "Aves", "Reptilia", "Amphibia", "Actinopterygii", "Agnatha", "Chondrichthyes", "Dipnomorpha")
 
 # Function to extract the class of vertebrates
 extract_class <- function(taxonomy) {
@@ -196,7 +196,10 @@ extract_class <- function(taxonomy) {
 
 # Create a new column with the class of vertebrates
 df.Nematoda_traitVert <- df.Nematoda_trait %>%
-  mutate(Class = sapply(Target_taxonomy, extract_class))
+  mutate(Class = sapply(Target_taxonomy, extract_class)) %>%
+  filter(!is.na(Class)) %>%
+  distinct(Species, .keep_all = TRUE)
+  
 
 
 
@@ -217,7 +220,7 @@ unique(df_Onchocercidae_traitgene$source_taxon_name)
 df.Nematoda <- df.Nematoda_all %>%
   filter(!is.na(Sequence), !is.na(Target_species))
 
-length(unique(df.Nematoda$Species))
+length(unique(df.Nematoda_traitVert$Species))
 length(unique(df.Nematoda$Sequence))
 
 
