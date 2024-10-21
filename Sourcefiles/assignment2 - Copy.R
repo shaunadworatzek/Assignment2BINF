@@ -113,13 +113,17 @@ centroids <- lapply(grouped_sequences, calculate_centroid)
 
 
 
-#### PART 3 -Downloading trait data on parasitism from GloBI----
+#### PART 3 -Downloading trait data on parasitism from GloBI using pagination----
 
 install.packages("rglobi")
 library(rglobi)
+library(httr)
+library(jsonlite)
 
-#define 
+#defining the limit and skip for pagination 
 
+limit <- 100  
+skip <- 0  
 
 # Define the source taxon and interaction type
 source_taxon <- "Nematoda"
@@ -161,23 +165,38 @@ repeat {
 
 names(Nematoda_trait)
 
-length(unique(Nematoda_trait$source_taxon_name))
+length(unique(Nematoda_trait$V2))
 
 df.Nematoda_trait <- Nematoda_trait %>%
-  mutate(spaces_source = str_count(V2, "[\\s\\.\\d]")) %>%
-  mutate(spaces_target = str_count(V12, "[\\s\\.\\d]")) %>%
-  select(V2, V10, V12, spaces_target, spaces_source ) %>%
+  mutate(spaces_source = str_count(V2, "[\\s\\.\\d]"),spaces_target = str_count(V12, "[\\s\\.\\d]")) %>%
   filter(spaces_source == 1, !is.na(spaces_source), spaces_target == 1, !is.na(spaces_target)) %>%
-  rename(Species = V2, Interaction = V10, Target_species = V12) %>%
-  distinct()
-  
+  select(Species = V2, Interaction = V10, Target_species = V12, Target_taxonomy = V13) %>%
+  distinct() 
 
 length(unique(df.Nematoda_trait$Species))
 
 
-#### PART 4 - Removing repeating trait data and sumarizing for each species 
+#### PART 4 - Organizing vertebrate host species by class ---- 
 
-??summary()
+
+# Define a vector of possible classes of vertebrates
+vertebrate_classes <- c("Mammalia", "Aves", "Reptilia", "Amphibia", "Osteichthyes", "Agnatha", "Chondrichthyes")
+
+# Function to extract the class of vertebrates
+extract_class <- function(taxonomy) {
+  # Split the taxonomy string by the delimiter
+  taxonomy_levels <- unlist(str_split(taxonomy, " \\| "))
+  
+  # Find the first match for vertebrate classes
+  class_found <- base::intersect(taxonomy_levels, vertebrate_classes)
+  
+  # Return the first found class or NA if none is found
+  return(ifelse(length(class_found) > 0, class_found[1], NA))
+}
+
+# Create a new column with the class of vertebrates
+df.Nematoda_traitVert <- df.Nematoda_trait %>%
+  mutate(Class = sapply(Target_taxonomy, extract_class))
 
 
 
