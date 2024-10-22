@@ -1,4 +1,4 @@
-#Loading the needed packages to open data from NCBI and GloBI into R 
+#Loading all the required packages and dealing with conflicts
 
 library(rentrez)
 library(seqinr)
@@ -12,35 +12,53 @@ library(ape)
 library(RSQLite)
 library(httr)
 library(jsonlite)
-#Loading needed packages to clean up the data 
-
 library(tidyverse)
+install.packages(ggtree)
 conflicted::conflict_prefer("filter", "dplyr")
 conflicted::conflicts_prefer(dplyr::rename)
 library(viridis)
+library(rglobi)
+library(httr)
+library(jsonlite)
 
 ####PART 1 - Download data from NCBI cleaning data up for further use----
 
-#look to see if the data I need is present on the NCBI website
+#investigate the databases on NCBI 
 
-Nematoda18S_search <- entrez_search(db = "nuccore", term = "(Nematoda[ORGN] AND 18S rRNA AND 200:1500[SLEN])", use_history = T)
+entrez_dbs()
 
-Nematoda18S_search
-Nematoda18S_search$web_history ## This stores the ID on the NCBI server.
 
-#Load source function
+#investigate the data by searching on the NCBI website
+
+Chromadorea18S_search <- entrez_search(db = "nuccore", term = "(Chromadorea[ORGN] AND 18S rRNA AND 200:1500[SLEN])", use_history = T)
+
+Chromadorea18S_search
+Chromadorea18S_search$web_history 
+
+Nematoda_taxonomy_Search <- entrez_search(db = "taxonomy", term = "Nematoda[LING]", use_history = T)
+
+Nematoda_taxonomy_Search
+Nematoda_taxonomy_Search$web_history
+
+Searchterms <- entrez_db_searchable(db = "taxonomy")
+entrez_db_summary(db = "taxonomy")
+
+
+#Load source function to download larger data sets from NCBI
+
 source("Sourcefiles/Entrez_Functions.R")
 
+#Fetching the sequences in FASTA format and writing to file, multiple files are made each with 100 sequences
 
-# Fetching the sequences in FASTA format and writing to file.
-FetchFastaFiles(searchTerm = "Nematoda[ORGN] AND 18S rRNA AND 200:1500[SLEN]", seqsPerFile = 100, fastaFileName = "Nematoda_18S")
+FetchFastaFiles(searchTerm = "Chromadorea[ORGN] AND 18S rRNA AND 200:1500[SLEN]", seqsPerFile = 100, fastaFileName = "Chromadorea_18S")
 
-# Merging the sequences into a dataframe.
-Nematoda_18S <- MergeFastaFiles(filePattern = "Nematoda_18S*")
+#Combing the many 100 sequence nematode files into one data frame on R
+
+Chromadorea_18S <- MergeFastaFiles(filePattern = "Chromadorea_18S*")
 
 #Cleaning up sequence data to only have the sequence and the species name and removing uncomplete species 
 
-df_Nematoda_18S <- Nematoda_18S %>%
+df_Chromadorea_18S <- Chromadorea_18S %>%
   separate(Title, into = c("Code", "Genus", "Species", "rest"), 
            sep = " ", 
            extra = "merge", 
@@ -51,74 +69,30 @@ df_Nematoda_18S <- Nematoda_18S %>%
   select(Code, Species, Sequence, spaces)%>%
   filter(spaces == 1, !is.na(spaces), !is.na(Species))
 
-length(unique(df_Nematoda_18S$Species))
+length(unique(df_Chromadorea_18S$Species))
 
-#looking at the sequence length 
+#looking at the sequence length and removing sequences longer than 1000 base pairs 
 
-df_Nematoda_18S.explore <- df_Nematoda_18S %>%
-  mutate(seqlength = nchar(df_Nematoda_18S$Sequence))
+df_Chromadorea_18S <- df_Chromadorea_18S %>%
+  mutate(seqlength = nchar(df_Chromadorea_18S$Sequence))
 
-hist(x = df_Nematoda_18S.explore$seqlength, xlab = "Sequence Legnth", ylab = "Frequency (No. Sequences")
+hist(x = df_Chromadorea_18S$seqlength, xlab = "Sequence Legnth", ylab = "Frequency (No. Sequences")
 
+df_Chromadorea_18S <- df_Chromadorea_18S %>%
+  filter(seqlength <= 1000) %>%
+  filter(seqlength >=500)
 
-#Looking at the sequences on an online browser
+hist(x = df_Chromadorea_18S$seqlength, xlab = "Sequence Legnth", ylab = "Frequency (No. Sequences")
 
-BrowseSeqs(df_Onchocercidae_18S$Sequence2)
-
-
-####PART 2 - finding a centroid sequence for each species---- 
-
-#I think that I need to run that muscle function at the bottom before I run this -because we need an aligned data set before we do this -- but maybe its also a filtering problem 
-#I also need to do some filtering before I do this!!!
-
-#Making the sequences into a DNAstringset
-
-class(df_Nematoda_18S$Sequence)
-df_Nematoda_18S$Sequence2 <- DNAStringSet(df_Nematoda_18S$Sequence)
-class(df_Nematoda_18S$Sequence2)
-
-names(df_Nematoda_18S$Sequence2) <- df_Nematoda_18S$code
-names(df_Nematoda_18S$Sequence2)
+length(unique(df_Chromadorea_18S$Species))
 
 
-#Grouping sequences by species 
-
-grouped_sequences <- split(df_Nematoda_18S$Sequence2, df_Nematoda_18S$Species)
-
-#Creating the function to find the centroid 
-
-calculate_centroid <- function(seqs) {
-  # Perform multiple sequence alignment
-  alignment <- DNAStringSet(muscle::muscle(seqs, gapOpening = -3000))
-  
-  # Convert the alignment to a DNAbin object to calculate distances
-  alignment_dnabin <- as.DNAbin(alignment)
-  
-  # Calculate pairwise distance matrix using TN93 model
-  dist_matrix <- dist.dna(as.DNAbin(alignment), model = "TN93")
-  
-  # Calculate centroid (sequence with the lowest sum of pairwise distances)
-  centroid_index <- which.min(rowSums(as.matrix(dist_matrix)))
-  
-  # Extract the sequence of the centroid
-  centroid_sequence <- as.character(alignment[centroid_index]) 
-  
-  return(centroid_sequence)
-}
-
-
-#Apply the centroid calculation for each species
-
-centroids <- lapply(grouped_sequences, calculate_centroid)
 
 
 
 #### PART 3 -Downloading trait data on parasitism from GloBI using pagination----
 
-install.packages("rglobi")
-library(rglobi)
-library(httr)
-library(jsonlite)
+
 
 #defining the limit and skip for pagination 
 
@@ -126,11 +100,11 @@ limit <- 100
 skip <- 0  
 
 # Define the source taxon and interaction type
-source_taxon <- "Nematoda"
+source_taxon <- "Chromadorea"
 interaction_type <- "parasiteOf"
 
 # Initialize empty data frame to store all results
-Nematoda_trait <- data.frame()
+Chromadorea_trait <- data.frame()
 
 # Loop to fetch all data through the API
 repeat {
@@ -155,7 +129,7 @@ repeat {
   }
   
   # Append to the complete results
-  Nematoda_trait <- rbind(Nematoda_trait, as.data.frame(interactions_chunk$data))
+  Chromadorea_trait <- rbind(Chromadorea_trait, as.data.frame(interactions_chunk$data))
   
   # Update the skip value for pagination
   skip <- skip + limit
@@ -163,21 +137,21 @@ repeat {
   
 #cleaning up the data to only have complete species 
 
-names(Nematoda_trait)
+names(Chromadorea_trait)
 
-length(unique(Nematoda_trait$V2))
+length(unique(Chromadorea_trait$V2))
 
-df.Nematoda_trait <- Nematoda_trait %>%
+df.Chromadorea_trait <- Chromadorea_trait %>%
   mutate(spaces_source = str_count(V2, "[\\s\\.\\d]"),spaces_target = str_count(V12, "[\\s\\.\\d]")) %>%
   filter(spaces_source == 1, !is.na(spaces_source), spaces_target == 1, !is.na(spaces_target)) %>%
   select(Species = V2, Interaction = V10, Target_species = V12, Target_taxonomy = V13) %>%
   distinct() 
 
-length(unique(df.Nematoda_trait$Species))
+length(unique(df.Chromadorea_trait$Species))
+
 
 
 #### PART 4 - Organizing vertebrate host species by class ---- 
-
 
 # Define a vector of possible classes of vertebrates
 vertebrate_classes <- c("Mammalia", "Aves", "Reptilia", "Amphibia", "Actinopterygii", "Agnatha", "Chondrichthyes", "Dipnomorpha")
@@ -195,49 +169,185 @@ extract_class <- function(taxonomy) {
 }
 
 # Create a new column with the class of vertebrates
-df.Nematoda_traitVert <- df.Nematoda_trait %>%
+df.Chromadorea_traitVert <- df.Chromadorea_trait %>%
   mutate(Class = sapply(Target_taxonomy, extract_class)) %>%
   filter(!is.na(Class)) %>%
   distinct(Species, .keep_all = TRUE)
-  
 
 
+length(unique(df.Chromadorea_traitVert$Species))
 
-#### PART 4 - combing the the centroid sequences for each species with the trait data for each species 
+
+#combing trait data with the sequence data to reduce the number of species in the centroid calculation and therefore reduce the computation time 
 ?semi_join
-df.Nematoda_all <- full_join(df.Nematoda_trait, df_Nematoda_18S, join_by("Species" == "Species"))
+df.Chromadorea_all <- full_join(df.Chromadorea_traitVert, df_Chromadorea_18S, join_by("Species" == "Species"))
 
-df.onc2 <- semi_join(df_Onchocercidae_18S, df.parasite.oncsub, join_by("Species" == "Species"))
-
-df_Onchocercidae_traitgene <- full_join(df_Onchocercidae_18S, df.parasite.oncsub, join_by("Species" == "source_taxon_name"), keep = TRUE, relationship = "many-to-many")
-?full_join
-
-length(unique(df_Onchocercidae_traitgene$Species))
-unique(df_Onchocercidae_traitgene$Species)
-length(unique(df_Onchocercidae_traitgene$source_taxon_name))
-unique(df_Onchocercidae_traitgene$source_taxon_name)
-
-df.Nematoda <- df.Nematoda_all %>%
+df.Chromadorea_all <- df.Chromadorea_all %>%
   filter(!is.na(Sequence), !is.na(Target_species))
 
-length(unique(df.Nematoda_traitVert$Species))
-length(unique(df.Nematoda$Sequence))
+length(unique(df.Chromadorea_all$Species))
+unique(df.Chromadorea_all$Species)
 
 
   
+####PART 6 - finding a centroid sequence for each species---- 
+
+#I think that I need to run that muscle function at the bottom before I run this -because we need an aligned data set before we do this -- but maybe its also a filtering problem 
+#I also need to do some filtering before I do this!!!
+
+#Making the sequences into a DNAstringset
+
+class(df.Chromadorea_all$Sequence)
+df.Chromadorea_all$Sequence2 <- DNAStringSet(df.Chromadorea_all$Sequence)
+class(df.Chromadorea_all$Sequence2)
+
+#Looking at the sequences on an online browser
+
+BrowseSeqs(df.Chromadorea_all$Sequence2)
+
+#Grouping sequences by species 
+
+grouped_sequences <- split(df.Chromadorea_all$Sequence2, df.Chromadorea_all$Species)
+
+#Creating the function to find the centroid 
+
+calculate_centroid <- function(seqs) {
+  # Perform multiple sequence alignment
+  alignment <- DNAStringSet(muscle::muscle(seqs, gapOpening = -3000))
+  
+  # Convert the alignment to a DNAbin object to calculate distances
+  alignment_dnabin <- as.DNAbin(alignment)
+  
+  # Calculate pairwise distance matrix using TN93 model
+  dist_matrix <- dist.dna(as.DNAbin(alignment), model = "TN93")
+  
+  # Calculate centroid (sequence with the lowest sum of pairwise distances)
+  centroid_index <- which.min(rowSums(as.matrix(dist_matrix)))
+  
+  # Extract the sequence of the centroid
+  centroid_sequence <- as.character(alignment[centroid_index]) 
+  
+  return(centroid_sequence)
+}
+
+
+#Apply the centroid calculation for each specimens and save it as a data frame 
+
+
+centroids <- lapply(grouped_sequences, calculate_centroid)
+class(centroids) 
+class(df.centroids)
+
+#### PART 5 - Phylogeny tree construction ----
+
+
+#Centroid conversion to a phyDat format
+
+df.centroids <- centroids %>%
+   as.data.frame() %>%
+  t() %>%
+  as.data.frame() %>%
+  rownames_to_column() %>%
+  mutate(Sequence_split = strsplit(as.character(V1), "")) %>%
+  unnest_wider(Sequence_split, names_sep= "V1_") %>%
+  mutate(rowname = gsub("\\.", " ", rowname)) %>%
+  column_to_rownames(var = "rowname") %>%
+  select(-V1) %>%
+  as.matrix()
+
+class(df.centroids)
+DNA.Chromadorea_centroid <- as.phyDat(df.centroids)
+class(DNA.Chromadorea_centroid)
+
+#Parisomonious tree construction 
+
+dist.Chromadorea <- dist.hamming(DNA.Chromadorea_centroid)
+
+tree.Chromadorea <- NJ(dist.Chromadorea)
+
+parsimony(tree.Chromadorea, DNA.Chromadorea_centroid)
+
+treeRatchet <- pratchet(DNA.Chromadorea_centroid, start=tree.Chromadorea, maxit=100,
+                        minit=5, k=5, trace=0)
+
+tree.best <- acctran(treeRatchet, DNA.Chromadorea_centroid)
+
+plotTree(tree.best, fsize = 0.6)
+
+fit.tree <- pml(tree.Chromadorea, data = DNA.Chromadorea_centroid)
+
+fit.model <-optim.pml(fit.tree, model = "GTR")
+ml_branch_lengths <- fit.tree$tree.Chromadorea$edge.length
+
+#compute the branch lengths 
+plot(tree.best)
+nodelabels()
+?nodelabels
+
+df.calibration <- makeChronosCalib(tree.best)
+?pml
+chronos(treeRatchet, method = "correlated ", power = 1)
+
+
+#Trait correlation 
 
 
 
+#converting the centroid sequences to a data frame
+
+df.centroids.trait <- centroids %>%
+  as.data.frame() %>%
+  t() %>%
+  as.data.frame() %>%
+  rownames_to_column(var = "Species") %>%
+  dplyr::rename("Centroid" = V1) %>%
+  mutate(Species = gsub("\\.", " ", Species))
+
+class(df.centroids.trait)
+class(df.centroids.trait$Species)
+
+# combing the centroid data with the trait data to make sure trait data corresponds to the species in the analysis  
+?semi_join
+df.Chromadorea_centroid <- full_join(df.Chromadorea_traitVert, df.centroids.trait, join_by("Species" == "Species"))
+
+Chromadorea_centroid <- df.Chromadorea_centroid %>%
+  filter(!is.na(Centroid), !is.na(Target_species)) %>%
+  select(Class, Species) 
+  
+vector_Chromadorea <- setNames(Chromadorea_centroid$Class,Chromadorea_centroid$Species)
+  
+class(df.Chromadorea_centroid$Class)
+
+#Trait correlation 
+
+tratitree <- phylosig(tree.best, vector_Chromadorea, method="lambda", test=FALSE, nsim=1000, se=NULL, start=NULL)
+
+?phylosig
+
+#Converting the centroids to a DNAstringset
+
+df.Chromadorea_centroid$Centroid <- as.vector(df.Chromadorea_centroid$Centroid)
+class(df.Chromadorea_centroid$Centroid)
 
 
+set.seed(3)
+data(Laurasiatherian)
+dm <- dist.hamming(Laurasiatherian)
+tree <- NJ(dm)
+parsimony(tree, Laurasiatherian)
+treeRA <- random.addition(Laurasiatherian)
+treeSPR <- optim.parsimony(tree, Laurasiatherian)
+# lower number of iterations for the example (to run less than 5 seconds),
+# keep default values (maxit, minit, k) or increase them for real life
+# analyses.
+treeRatchet <- pratchet(Laurasiatherian, start=tree, maxit=100,
+                        minit=5, k=5, trace=0)
+# assign edge length (number of substitutions)
+treeRatchet <- acctran(treeRatchet, Laurasiatherian)
+# remove edges of length 0
+treeRatchet <- di2multi(treeRatchet)
+plot(midpoint(treeRatchet))
+add.scale.bar(0,0, length=100)
+parsimony(c(tree,treeSPR, treeRatchet), Laurasiatherian
 
-#Starting the alignment - I might want to remove this
 
-df.parasite.alignment <- DNAStringSet(muscle::muscle(df.parasite$Sequence2, maxiters = 2), use.names = TRUE)
-
-df.parasite.alignment
-
-BrowseSeqs(df.parasite.alignment)
-
-
-length(all.equal(df.parasite.oncsub$source_taxon_name, df_Onchocercidae_18S$Species))
