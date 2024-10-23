@@ -58,6 +58,7 @@ Chromadorea_18S <- MergeFastaFiles(filePattern = "Chromadorea_18S*")
 
 #Cleaning up sequence data to only have the sequence and the species name and removing uncomplete species 
 
+
 df_Chromadorea_18S <- Chromadorea_18S %>%
   separate(Title, into = c("Code", "Genus", "Species", "rest"), 
            sep = " ", 

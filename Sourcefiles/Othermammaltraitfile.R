@@ -8,6 +8,7 @@ vignette("data_info")
 data(trait_glossary)
 
 
+
 mammal.trait <- pantheria %>%
   select(AdultBodyMass_g, Genus, Species) %>%
   filter(!is.na(AdultBodyMass_g)) %>%
